@@ -26,7 +26,7 @@
 
 	Code:       Nicolas Guex and Christian Iseli
 	Contacts:   Nicolas.Guex@unil.ch and Christian.Iseli@unil.ch
-	Repository: https://github.com/sib-swiss/adniview
+	Repository: https://github.com/sib-swiss/samtools
 
 
 
