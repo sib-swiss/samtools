@@ -3,7 +3,7 @@ samtools
 
 This is *not* the official development repository for samtools.
 
-This is our version of samtools, based on the original version, on which we have added an interactive BAM viewer tool.
+This is our version of samtools, based on the original version, on which we have added an interactive BAM viewer tool (accessible with the following command: samtools ADVIEW).
 
 The official repository is here:
 - [samtools](https://github.com/samtools/samtools): mpileup and other tools for handling SAM, BAM, CRAM
