@@ -65,6 +65,7 @@ int main_addreplacerg(int argc, char *argv[]);
 int faidx_main(int argc, char *argv[]);
 int dict_main(int argc, char *argv[]);
 int fqidx_main(int argc, char *argv[]);
+int main_ADinteractive(int argc, char *argv[]);
 
 const char *samtools_version()
 {
@@ -120,6 +121,7 @@ static void usage(FILE *fp)
 "  -- Viewing\n"
 "     flags          explain BAM flags\n"
 "     tview          text alignment viewer\n"
+"     ADVIEW         multi bam files alignment interactive comparison viewer\n"
 "     view           SAM<->BAM<->CRAM conversion\n"
 "     depad          convert padded BAM to unpadded BAM\n"
 "\n");
@@ -163,6 +165,7 @@ int main(int argc, char *argv[])
 
     int ret = 0;
     if (strcmp(argv[1], "view") == 0)           ret = main_samview(argc-1, argv+1);
+    else if (strcmp(argv[1], "ADVIEW") == 0)    ret = main_ADinteractive(argc-1, argv+1);
     else if (strcmp(argv[1], "import") == 0)    ret = main_import(argc-1, argv+1);
     else if (strcmp(argv[1], "mpileup") == 0)   ret = bam_mpileup(argc-1, argv+1);
     else if (strcmp(argv[1], "merge") == 0)     ret = bam_merge(argc-1, argv+1);

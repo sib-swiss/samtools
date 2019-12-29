@@ -1,17 +1,17 @@
 samtools
 ========
 
-[![Build Status](https://travis-ci.org/samtools/samtools.svg?branch=develop)](https://travis-ci.org/samtools/samtools)
-[![Build status](https://ci.appveyor.com/api/projects/status/enujqi06jlqw493t/branch/develop?svg=true)](https://ci.appveyor.com/project/samtools/samtools/branch/develop)
-[![Github All Releases](https://img.shields.io/github/downloads/samtools/samtools/total.svg)](https://github.com/samtools/samtools/releases/latest)
+This is *not* the official development repository for samtools.
 
-This is the official development repository for samtools.
+This is our version of samtools, based on the original version, on which we have added an interactive BAM viewer tool.
 
-The original samtools package has been split into three separate
-but tightly coordinated projects:
+The official repository is here:
+- [samtools](https://github.com/samtools/samtools): mpileup and other tools for handling SAM, BAM, CRAM
+
+To build this tool, you will need to checkout the htslib project as ../htslib
+
+The htslib can be found here:
 - [htslib](https://github.com/samtools/htslib): C-library for handling high-throughput sequencing data
-- samtools: mpileup and other tools for handling SAM, BAM, CRAM
-- [bcftools](https://github.com/samtools/bcftools): calling and other tools for handling VCF, BCF
 
 See also http://github.com/samtools/
 
