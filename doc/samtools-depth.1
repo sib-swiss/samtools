@@ -131,6 +131,9 @@ Discard any read that has any of the flags specified by
 set.  FLAGS are specified as for the
 .B "-g"
 option. [UNMAP,SECONDARY,QCFAIL,DUP]
+.TP
+.B -J
+Include reads with deletions in depth computation.
 
 .SH AUTHOR
 .PP
@@ -139,6 +142,7 @@ Written by Heng Li from the Sanger Institute.
 .SH SEE ALSO
 .IR samtools (1),
 .IR samtools-mpileup (1),
+.IR samtools-coverage (1),
 .IR samtools-sort (1)
 .PP
 Samtools website: <http://www.htslib.org/>
