@@ -2347,7 +2347,9 @@ static int getGTLchunk(char *fn,int chr,int pos,BAMFILE *bam,TAG *tag,int realig
 				break;
 			}
 			memset(tag[i].tagname,' ',kMaxTagnameLength);
-			fgets(buf,kMaxLineBuf,f[t]);
+			// fgets returns NULL upon encountering EOF when no characters have been read
+			if (fgets(buf,kMaxLineBuf,f[t]) == NULL)
+				break;
 		//	fprintf(stderr,"L%6d %s\n",i,buf);
 			sscanf(buf,"%s\t%s\t%s\t%s\t%s\t%u\t%d\t%d\t%d\t%lu"
 					,tag[i].tagname
