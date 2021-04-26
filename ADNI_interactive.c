@@ -6,8 +6,9 @@
 	aligned bam files or GTL files directly in the terminal.
 	by N.Guex and C.Iseli 2014-2019
 
-    Copyright (C) SIB  - Swiss Institute of Bioinformatics,   2014-2019 Nicolas Guex and Christian Iseli
-    Copyright (C) UNIL - University of Lausanne, Switzerland       2019 Nicolas Guex and Christian Iseli
+    Copyright (C) SIB  - Swiss Institute of Bioinformatics,                2014-2019 Nicolas Guex and Christian Iseli
+    Copyright (C) UNIL - University of Lausanne, Switzerland                    2019 Nicolas Guex and Christian Iseli
+    Copyright (C) EPFL - Ecole Polytechnique Fédérale de Lausanne, Switzerland  2021 Christian Iseli
 
 
     This program is free software: you can redistribute it and/or modify
@@ -25,7 +26,7 @@
 
 
 	Code:       Nicolas Guex and Christian Iseli
-	Contacts:   Nicolas.Guex@unil.ch and Christian.Iseli@unil.ch
+	Contacts:   Nicolas.Guex@unil.ch and christian.iseli@epfl.ch
 	Repository: https://github.com/sib-swiss/samtools
 
 
@@ -90,7 +91,9 @@ DEALINGS IN THE SOFTWARE.  */
 static int gRobinPrintEveryNthLine = 1;
 #else
  #define kHalfGenomicChunk 10000  // max without changing the way I grab the genomic seq with fetch is 15000...
- #define kMaxTagsXScreens 0x400000 /* guesstimate; this eats roughly 64 gigs of virtual mem (and real mem if reads are loaded) */
+ //define kMaxTagsXScreens 0x400000 /* guesstimate; this eats roughly 64 gigs of virtual mem (and real mem if reads are loaded) */
+ //define kMaxTagsXScreens 0x100000 /* guesstimate; this eats roughly 16 gigs of virtual mem (and real mem if reads are loaded) */
+ #define kMaxTagsXScreens 0x80000 /* guesstimate; this eats roughly 8 gigs of virtual mem (and real mem if reads are loaded) */
 #endif
 
 #define kGenomicChunk (kHalfGenomicChunk*2)
@@ -103,14 +106,16 @@ static int gRobinPrintEveryNthLine = 1;
  #define kMaxTagLength 1024
  #define kMaxScreenCol 1024
 #else
- #define kMaxTagLength 8192
+ //define kMaxTagLength 8192
+ #define kMaxTagLength (2*8192 + 4096)
  #define kMaxScreenCol 1024
 #endif
 
 #define kMaxTagInsertion 256
 #define kMaxTagnameLength 48
 #define kMaxTagOrdinalLength 12
-#define kMaxVirutalScreen 24
+//define kMaxVirutalScreen 24
+#define kMaxVirutalScreen 9
 #define kScreenPanelMargin 5
 #define kColOffset 5
 #define kMaxPatients 1024
@@ -491,10 +496,11 @@ fprintf(debug,"readTags = %d; c->pos = %d\n",readTags, c->pos);
 				{
 
 					case 'H':
-						for (k = 0; k < bam_cigar_oplen(cigar[i]); k++)
-						{
-							srcp++;
-						}
+						//for (k = 0; k < bam_cigar_oplen(cigar[i]); k++)
+						//{
+						//	srcp++;
+						//}
+						// actually - do nothing...
 					break;
 					case 'M':
 						for (k = 0; k < bam_cigar_oplen(cigar[i]); k++)
@@ -564,7 +570,7 @@ fprintf(debug,"readTags = %d; c->pos = %d\n",readTags, c->pos);
 						tag[retained].taginsertionQual[ip] = '\0';
 #else
 						// proposed way to store insertion, not particularly clever: save original tag.
-						for (k=0; k < c->l_qseq;k++)
+						for (k=0; k < c->l_qseq && k < (kMaxTagInsertion - 1);k++)
 						{
 							tag[retained].taginsertion[k] = "=ACMGRSVTWYHKDBN"[bam_seqi(s, k)];
 							tag[retained].taginsertionQual[k] = (char)(q[k] + 33);
@@ -613,13 +619,16 @@ fprintf(debug,"readTags = %d; c->pos = %d\n",readTags, c->pos);
 							}
 						}
 						if (verbose >= 9  && dbg == 1)
-							fprintf(stderr,"%u\t%d\t%s\t%s\t%u\t%u\t%.20s; mpos %zd pos %zd\n",retained,tag[retained].tagpair,tag[retained].tagname,(bam->header)->target_name[c->tid],tag[retained].tagpos,c->qual,tag[retained].tagseq,(ssize_t) (c->mpos),(ssize_t) (c->pos)); 					}
+							fprintf(stderr,"%u\t%d\t%s\t%s\t%u\t%u\t%.20s; mpos %zd pos %zd\n",retained,tag[retained].tagpair,tag[retained].tagname,(bam->header)->target_name[c->tid],tag[retained].tagpos,c->qual,tag[retained].tagseq,(ssize_t) (c->mpos),(ssize_t) (c->pos));
+					}
 					else
 					{
 						if (b->core.flag & BAM_FREVERSE)
 							tag[retained].tagpair = 1;
 						else
 							tag[retained].tagpair = 0;
+						if (verbose >= 9  && dbg == 1)
+							fprintf(stderr,"%u\t%d\t%s\t%s\t%u\t%u\t%.20s; mpos %zd pos %zd\n",retained,tag[retained].tagpair,tag[retained].tagname,(bam->header)->target_name[c->tid],tag[retained].tagpos,c->qual,tag[retained].tagseq,(ssize_t) (c->mpos),(ssize_t) (c->pos));
 					}
 					retained++;
 				} // ok
@@ -2365,8 +2374,8 @@ static int getGTLchunk(char *fn,int chr,int pos,BAMFILE *bam,TAG *tag,int realig
 					);
 			if (tag[i].taginsertion[0] == '=')
 			{
-				strcpy(tag[i].taginsertion,tag[i].tagseq);
-				strcpy(tag[i].taginsertionQual,tag[i].tagqual);
+				strncpy(tag[i].taginsertion,tag[i].tagseq,kMaxTagInsertion-1);
+				strncpy(tag[i].taginsertionQual,tag[i].tagqual,kMaxTagInsertion-1);
 			}
 			len = strlen(tag[i].tagname);
 			tag[i].tagname[len] = ' ';
@@ -2779,6 +2788,10 @@ static int readBAM(BAMFILE *bam,TAG *tag,int chr,int pos)
 	else if (chr == 24)
 		sprintf(chrToProcess,"%sY:%d",gNoChrInBAM ? "" : "chr",(pos > 1000) ? pos-1000 : 0);
 #endif
+	if (chrPos[chr].name[0] == 0)
+	{
+		sprintf(chrPos[chr].name, "chr%u", chr);
+	}
 	sprintf(chrToProcess,"%s:%d",(gNoChrInBAM && chrPos[chr].name[0] == 'c' && chrPos[chr].name[1] == 'h' && chrPos[chr].name[2] == 'r') ? chrPos[chr].name + 3 : chrPos[chr].name,(pos > 1000) ? pos-1000 : 0);
 
 
