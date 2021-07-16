@@ -92,8 +92,8 @@ static int gRobinPrintEveryNthLine = 1;
 #else
  #define kHalfGenomicChunk 10000  // max without changing the way I grab the genomic seq with fetch is 15000...
  //define kMaxTagsXScreens 0x400000 /* guesstimate; this eats roughly 64 gigs of virtual mem (and real mem if reads are loaded) */
- //define kMaxTagsXScreens 0x100000 /* guesstimate; this eats roughly 16 gigs of virtual mem (and real mem if reads are loaded) */
- #define kMaxTagsXScreens 0x80000 /* guesstimate; this eats roughly 8 gigs of virtual mem (and real mem if reads are loaded) */
+ #define kMaxTagsXScreens 0x100000 /* guesstimate; this eats roughly 16 gigs of virtual mem (and real mem if reads are loaded) */
+ //define kMaxTagsXScreens 0x80000 /* guesstimate; this eats roughly 8 gigs of virtual mem (and real mem if reads are loaded) */
 #endif
 
 #define kGenomicChunk (kHalfGenomicChunk*2)
@@ -353,7 +353,8 @@ getCoverage(int pos, BAMFILE *bam, TAG *tag, int *lastP)
 		if (max > kGenomicChunk+kMaxScreenCol)
 			max = kGenomicChunk+kMaxScreenCol;
 		for (i = *lastP; i < max; i++)
-			bam->coverage[i * kCoverageElements + 6] += 1;
+			if (bam->coverage[i * kCoverageElements + 6] < 0xFFFFU)
+				bam->coverage[i * kCoverageElements + 6] += 1;
 	}
 	while (tag->tagseq[sp] != 0)
 	{
@@ -379,7 +380,8 @@ getCoverage(int pos, BAMFILE *bam, TAG *tag, int *lastP)
 					case '*': v = 5; break;
 					default: v = 6;
 				}
-				bam->coverage[idx + v] += 1;
+				if (bam->coverage[idx + v] < 0xFFFFU)
+					bam->coverage[idx + v] += 1;
 			}
 		}
 		sp += 1;
@@ -667,7 +669,7 @@ fprintf(debug,"readTags = %d; c->pos = %d\n",readTags, c->pos);
 	}
 	bam->startPos = pos;
 	bam->maxCoverage = 0;
-	short tem[kGenomicChunk+kMaxScreenCol];
+	unsigned short tem[kGenomicChunk+kMaxScreenCol];
 	unsigned int tc = 0;
 	for (r = 0; r < kCoverageElements * (kGenomicChunk+kMaxScreenCol); r += kCoverageElements)
 	{
@@ -1829,28 +1831,41 @@ void printchunk(TAG *tag, BAMFILE *bam, int chr, int line,unsigned int firstGeno
 			}
 		}
 		unsigned int val = ((bam->medianCoverage * 2) > (cpart * 8)) ? (bam->medianCoverage * 2) : cpart * 8;
-		if (val > 999)
-			val = 999;
+		char pval[16];
+		int pvallen = snprintf(pval, 16, "%3u", val);
+		if (pvallen > 3)
+		{
+			pval[1] = 'E';
+			pval[2] = '0' + pvallen - 1;
+		}
 		i = cpart - 1;
-		linelength[printed] = sprintf(&buffer[bufpos]," %3u %.*s",val,panelll[i],panel + i * width * 16); bufpos += linelength[printed++];
+		linelength[printed] = sprintf(&buffer[bufpos]," %.3s %.*s",pval,panelll[i],panel + i * width * 16); bufpos += linelength[printed++];
 		i -= 1;
 		for ( ; i > (cpart / 2); i--)
 		{
 			linelength[printed] = sprintf(&buffer[bufpos],"     %.*s",panelll[i],panel + i * width * 16); bufpos += linelength[printed++];
 		}
 		val = ((bam->medianCoverage * 2) > (cpart * 8)) ? bam->medianCoverage : cpart * 4;
-		if (val > 999)
-			val = 999;
-		linelength[printed] = sprintf(&buffer[bufpos]," %3u %.*s",val,panelll[i],panel + i * width * 16); bufpos += linelength[printed++];
+		pvallen = snprintf(pval, 16, "%3u", val);
+		if (pvallen > 3)
+		{
+			pval[1] = 'E';
+			pval[2] = '0' + pvallen - 1;
+		}
+		linelength[printed] = sprintf(&buffer[bufpos]," %.3s %.*s",pval,panelll[i],panel + i * width * 16); bufpos += linelength[printed++];
 		i -= 1;
 		for ( ; i > 0; i--)
 		{
 			linelength[printed] = sprintf(&buffer[bufpos],"     %.*s",panelll[i],panel + i * width * 16); bufpos += linelength[printed++];
 		}
 		val = step;
-		if (val > 999)
-			val = 999;
-		linelength[printed] = sprintf(&buffer[bufpos]," %3u %.*s",val,panelll[i],panel + i * width * 16); bufpos += linelength[printed++];
+		pvallen = snprintf(pval, 16, "%3u", val);
+		if (pvallen > 3)
+		{
+			pval[1] = 'E';
+			pval[2] = '0' + pvallen - 1;
+		}
+		linelength[printed] = sprintf(&buffer[bufpos]," %.3s %.*s",pval,panelll[i],panel + i * width * 16); bufpos += linelength[printed++];
 		free(panel);
 		free(panelll);
 	}
@@ -2001,28 +2016,41 @@ void printchunk(TAG *tag, BAMFILE *bam, int chr, int line,unsigned int firstGeno
 			}
 		}
 		unsigned int val = step;
-		if (val > 999)
-			val = 999;
+		char pval[16];
+		int pvallen = snprintf(pval, 16, "%3u", val);
+		if (pvallen > 3)
+		{
+			pval[1] = 'E';
+			pval[2] = '0' + pvallen - 1;
+		}
 		i = 0;
-		linelength[printed] = sprintf(&buffer[bufpos]," %3u %.*s",val,width,panel + i * width); bufpos += linelength[printed++];
+		linelength[printed] = sprintf(&buffer[bufpos]," %.3s %.*s",pval,width,panel + i * width); bufpos += linelength[printed++];
 		i += 1;
 		for ( ; i < (cpart / 2); i++)
 		{
 			linelength[printed] = sprintf(&buffer[bufpos],"     %.*s",width,panel + i * width); bufpos += linelength[printed++];
 		}
 		val = step * cpart / 2;
-		if (val > 999)
-			val = 999;
-		linelength[printed] = sprintf(&buffer[bufpos]," %3u %.*s",val,width,panel + i * width); bufpos += linelength[printed++];
+		pvallen = snprintf(pval, 16, "%3u", val);
+		if (pvallen > 3)
+		{
+			pval[1] = 'E';
+			pval[2] = '0' + pvallen - 1;
+		}
+		linelength[printed] = sprintf(&buffer[bufpos]," %.3s %.*s",pval,width,panel + i * width); bufpos += linelength[printed++];
 		i += 1;
 		for ( ; i < (cpart - 1); i++)
 		{
 			linelength[printed] = sprintf(&buffer[bufpos],"     %.*s",width,panel + i * width); bufpos += linelength[printed++];
 		}
 		val = step * cpart;
-		if (val > 999)
-			val = 999;
-		linelength[printed] = sprintf(&buffer[bufpos]," %3u %.*s",val,width,panel + i * width); bufpos += linelength[printed++];
+		pvallen = snprintf(pval, 16, "%3u", val);
+		if (pvallen > 3)
+		{
+			pval[1] = 'E';
+			pval[2] = '0' + pvallen - 1;
+		}
+		linelength[printed] = sprintf(&buffer[bufpos]," %.3s %.*s",pval,width,panel + i * width); bufpos += linelength[printed++];
 	}
 
 	// print tags
