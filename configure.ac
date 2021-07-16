@@ -1,6 +1,6 @@
 # Configure script for samtools, utilities for Sequence Alignment/Map files.
 #
-#    Copyright (C) 2015, 2017 Genome Research Ltd.
+#    Copyright (C) 2015, 2017, 2019 Genome Research Ltd.
 #
 #    Author: John Marshall <jm18@sanger.ac.uk>
 #
@@ -34,7 +34,7 @@ m4_include([m4/hts_with_curses.m4])
 m4_include([m4/ax_with_htslib.m4])
 
 dnl Copyright notice to be copied into the generated configure script
-AC_COPYRIGHT([Portions copyright (C) 2015,2017 Genome Research Ltd.
+AC_COPYRIGHT([Portions copyright (C) 2015,2017, 2019 Genome Research Ltd.
 
 This configure script is free software: you are free to change and
 redistribute it.  There is NO WARRANTY, to the extent permitted by law.])
@@ -137,7 +137,7 @@ case $host_alias in
     # This also sets __USE_MINGW_ANSI_STDIO which in turn makes PRId64,
     # %lld and %z printf formats work.  It also enforces the snprintf to
     # be C99 compliant so it returns the correct values (in kstring.c).
-    CPPFLAGS="$CPPCFLAGS -D_XOPEN_SOURCE=600"
+    CPPFLAGS="$CPPFLAGS -D_XOPEN_SOURCE=600"
     ;;
 esac
 

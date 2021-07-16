@@ -1,9 +1,9 @@
 '\" t
-.TH samtools-stats 1 "6 December 2019" "samtools-1.10" "Bioinformatics tools"
+.TH samtools-stats 1 "7 July 2021" "samtools-1.13" "Bioinformatics tools"
 .SH NAME
 samtools stats \- produces comprehensive statistics from alignment file
 .\"
-.\" Copyright (C) 2008-2011, 2013-2018 Genome Research Ltd.
+.\" Copyright (C) 2008-2011, 2013-2018, 2020-2021 Genome Research Ltd.
 .\" Portions copyright (C) 2010, 2011 Broad Institute.
 .\"
 .\" Author: Heng Li <lh3@sanger.ac.uk>
@@ -65,6 +65,7 @@ LFQ	Last fragment qualities
 GCF	GC content of first fragments
 GCL	GC content of last fragments
 GCC	ACGT content per cycle
+GCT	ACGT content per cycle, read oriented
 FBC	ACGT content per cycle for first fragments only
 FTC	ACGT raw counters for first fragments
 LBC	ACGT content per cycle for last fragments only
@@ -109,6 +110,9 @@ fragments.
 Reads where PAIRED is set and either both READ1 and READ2 are set or
 neither is set are not counted in either category.
 .PP
+Information on the meaning of the flags is given in the SAM specification
+document <https://samtools.github.io/hts-specs/SAMv1.pdf>.
+
 The CHK row contains distinct CRC32 checksums of read names, sequences
 and quality values.  The checksums are computed per alignment record
 and summed, meaning the checksum does not change if the input file has
@@ -120,7 +124,8 @@ but more comprehensive.
 
 .RS
 .B raw total sequences
-- total number of reads in a file. Same number reported by
+- total number of reads in a file, excluding supplementary and secondary reads.
+Same number reported by
 .BR "samtools view -c".
 
 .B filtered sequences
@@ -169,6 +174,9 @@ fragment reads (flags 0x01 and 0x80 set, 0x40 not set).
 
 .B non-primary alignments
 - number of secondary reads (flag 0x100 (256) set).
+
+.B supplementary alignments
+- number of supplementary reads (flag 0x800 (2048) set).
 
 .B total length
 - number of processed bases from reads that are neither secondary nor supplementary (flags 0x100 (256) and 0x800 (2048) are not set).
@@ -289,6 +297,13 @@ GCC, FBC and LBC report the nucleotide content per cycle either combined
 are cycle number (integer), and percentage counts for A, C, G, T, N
 and other (typically containing ambiguity codes) normalised against
 the total counts of A, C, G and T only (excluding N and other).
+
+GCT offers a similar report to GCC, but whereas GCC counts nucleotides
+as they appear in the SAM output (in reference orientation), GCT takes into
+account whether a nucleotide belongs to a reverse complemented read and counts
+it in the original read orientation.
+If there are no reverse complemented reads in a file, the GCC and GCT reports
+will be identical.
 
 FTC and LTC report the total numbers of nucleotides for first and last
 fragments, respectively. The columns are the raw counters for A, C, G,
@@ -450,8 +465,7 @@ Number of input/output compression threads to use in addition to main thread [0]
 .SH AUTHOR
 .PP
 Written by Petr Danacek with major modifications by Nicholas Clarke,
-Martin Pollard, Nicholas Clarke, Josh Randall and Valeriu Ohan, all
-from the Sanger Institute.
+Martin Pollard, Josh Randall, and Valeriu Ohan, all from the Sanger Institute.
 
 .SH SEE ALSO
 .IR samtools (1),

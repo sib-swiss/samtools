@@ -1,9 +1,9 @@
 '\" t
-.TH samtools-index 1 "6 December 2019" "samtools-1.10" "Bioinformatics tools"
+.TH samtools-index 1 "7 July 2021" "samtools-1.13" "Bioinformatics tools"
 .SH NAME
 samtools index \- indexes SAM/BAM/CRAM files
 .\"
-.\" Copyright (C) 2008-2011, 2013-2018 Genome Research Ltd.
+.\" Copyright (C) 2008-2011, 2013-2020 Genome Research Ltd.
 .\" Portions copyright (C) 2010, 2011 Broad Institute.
 .\"
 .\" Author: Heng Li <lh3@sanger.ac.uk>
@@ -81,6 +81,11 @@ either
 or
 .IB aln.sam.gz .csi
 will be created, depending on the index format selected.
+
+The BAI index format can handle individual chromosomes up to 512 Mbp
+(2^29 bases) in length.
+If your input file might contain reads mapped to positions greater than that,
+you will need to use a CSI index.
 
 .SH OPTIONS
 .TP 8

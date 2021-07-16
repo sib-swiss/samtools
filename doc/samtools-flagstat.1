@@ -1,9 +1,9 @@
 '\" t
-.TH samtools-flagstat 1 "6 December 2019" "samtools-1.10" "Bioinformatics tools"
+.TH samtools-flagstat 1 "7 July 2021" "samtools-1.13" "Bioinformatics tools"
 .SH NAME
 samtools flagstat \- counts the number of alignments for each FLAG type
 .\"
-.\" Copyright (C) 2008-2011, 2013-2019 Genome Research Ltd.
+.\" Copyright (C) 2008-2011, 2013-2019, 2021 Genome Research Ltd.
 .\" Portions copyright (C) 2010, 2011 Broad Institute.
 .\"
 .\" Author: Heng Li <lh3@sanger.ac.uk>
@@ -53,6 +53,9 @@ to stdout.
 
 Provides counts for each of 13 categories based primarily on bit flags in
 the FLAG field.
+Information on the meaning of the flags is given in the SAM specification
+document <https://samtools.github.io/hts-specs/SAMv1.pdf>.
+
 Each category in the output is broken down into QC pass and QC fail.
 In the default output format, these are presented as "#PASS + #FAIL" followed
 by a description of the category.
@@ -70,6 +73,9 @@ Following this, additional categories are given for reads which are:
 
 .RS 18
 .TP
+primary
+neither 0x100 nor 0x800 bit set
+.TP
 secondary
 0x100 bit set
 .TP
@@ -79,8 +85,14 @@ supplementary
 duplicates
 0x400 bit set
 .TP
+primary duplicates
+0x400 bit set and neither 0x100 nor 0x800 bit set 
+.TP
 mapped
 0x4 bit not set
+.TP
+primary mapped
+0x4, 0x100 and 0x800 bits not set
 .TP
 paired in sequencing
 0x1 bit set
@@ -139,19 +151,27 @@ The top-level object contains two named objects
 These contain the various categories listed above as names and
 the corresponding count as value.
 
-For the default format, the
-.BR mapped ", " "properly paired" ", and " singletons
-show the count as a percentage of the total number of QC-passed or QC-failed
+For the default format, 
+.BR mapped "
+shows the count as a percentage of the total number of QC-passed or QC-failed
 reads after the category name.
 For example:
 .EX
 32 + 0 mapped (94.12% : N/A)
 .EE
 
+The
+.BR "properly paired" " and " singletons
+counts work in a similar way but the percentage is against the total number of
+QC-passed and QC-failed pairs.  The
+.BR "primary mapped"
+count is a percentage of the total number of QC-passed and QC-failed primary
+reads. 
+
 In the
 .BR tsv " and " json
 formats, these percentages are listed in separate categories
-.BR "mapped %" ", " "properly paired %" ", and " "singletons %" .
+.BR "mapped %" ", " "primary mapped %" ", " "properly paired %" ", and " "singletons %" .
 If the percentage cannot be calculated (because the total is zero)
 then in the
 .BR default " and " tsv

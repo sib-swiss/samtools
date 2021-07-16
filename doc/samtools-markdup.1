@@ -1,9 +1,9 @@
 '\" t
-.TH samtools-markdup 1 "6 December 2019" "samtools-1.10" "Bioinformatics tools"
+.TH samtools-markdup 1 "7 July 2021" "samtools-1.13" "Bioinformatics tools"
 .SH NAME
 samtools markdup \- mark duplicate alignments in a coordinate sorted file
 .\"
-.\" Copyright (C) 2008-2011, 2013-2019 Genome Research Ltd.
+.\" Copyright (C) 2008-2011, 2013-2020 Genome Research Ltd.
 .\" Portions copyright (C) 2010, 2011 Broad Institute.
 .\"
 .\" Author: Heng Li <lh3@sanger.ac.uk>
@@ -60,6 +60,8 @@ samtools markdup
 .RB [ --mode ]
 .RB [ --include-fails ]
 .RB [ --no-PG ]
+.RB [ -u ]
+.RB [ --no-multi-dup ]
 .I in.algsort.bam out.bam
 
 .SH DESCRIPTION
@@ -113,8 +115,19 @@ While the two methods identify mostly the same reads as duplicates, mode
 \fBs\fR tends to return more results.  Unpaired reads are treated identically
 by both modes.
 .TP
+.B -u
+Output uncompressed SAM, BAM or CRAM.
+.TP
 .B --include-fails
 Include quality checked failed reads.
+.TP
+.B --no-multi-dup
+Stop checking duplicates of duplicates for correctness.  While still marking
+reads as duplicates further checks to make sure all optical duplicates are found
+are not carried out.  Also operates on \fB-t\fR tagging where reads may tagged
+with a better quality read but not necessarily the best one.  Using this option
+can speed up duplicate marking when there are a great many duplicates for each
+original read. 
 .TP
 .B --no-PG
 Do not add a PG line to the output file.

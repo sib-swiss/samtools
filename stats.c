@@ -1,6 +1,6 @@
 /*  stats.c -- This is the former bamcheck integrated into samtools/htslib.
 
-    Copyright (C) 2012-2019 Genome Research Ltd.
+    Copyright (C) 2012-2021 Genome Research Ltd.
 
     Author: Petr Danecek <pd3@sanger.ac.uk>
     Author: Sam Nicholls <sam@samnicholls.net>
@@ -175,8 +175,8 @@ typedef struct
     // Arrays for the histogram data
     uint64_t *quals_1st, *quals_2nd;
     uint64_t *gc_1st, *gc_2nd;
-    acgtno_count_t *acgtno_cycles_1st;
-    acgtno_count_t *acgtno_cycles_2nd;
+    acgtno_count_t *acgtno_cycles_1st, *acgtno_cycles_2nd;
+    acgtno_count_t *acgtno_revcomp;
     uint64_t *read_lengths, *read_lengths_1st, *read_lengths_2nd;
     uint64_t *insertions, *deletions;
     uint64_t *ins_cycles_1st, *ins_cycles_2nd, *del_cycles_1st, *del_cycles_2nd;
@@ -210,7 +210,7 @@ typedef struct
     uint64_t nbases_mapped_cigar;
     uint64_t nbases_trimmed;  // bwa trimmed bases
     uint64_t nmismatches;
-    uint64_t nreads_QCfailed, nreads_secondary;
+    uint64_t nreads_QCfailed, nreads_secondary, nreads_supplementary;
     struct {
         uint32_t names, reads, quals;
     } checksum;
@@ -647,6 +647,11 @@ void realloc_buffers(stats_t *stats, int seq_len)
         error("Could not realloc buffers, the sequence too long: %d (%ld)\n", seq_len, n*sizeof(acgtno_count_t));
     memset(stats->acgtno_cycles_2nd + stats->nbases, 0, (n-stats->nbases)*sizeof(acgtno_count_t));
 
+    stats->acgtno_revcomp = realloc(stats->acgtno_revcomp, n*sizeof(acgtno_count_t));
+    if ( !stats->acgtno_revcomp )
+        error("Could not realloc buffers, the sequence too long: %d (%ld)\n", seq_len, n*sizeof(acgtno_count_t));
+    memset(stats->acgtno_revcomp + stats->nbases, 0, (n-stats->nbases)*sizeof(acgtno_count_t));
+
     stats->read_lengths = realloc(stats->read_lengths, n*sizeof(uint64_t));
     if ( !stats->read_lengths )
         error("Could not realloc buffers, the sequence too long: %d (%ld)\n", seq_len,n*sizeof(uint64_t));
@@ -870,16 +875,20 @@ void collect_orig_read_stats(bam1_t *bam_line, stats_t *stats, int* gc_count_out
             switch (bam_seqi(seq, i)) {
             case 1:
                 acgtno_cycles[ read_cycle ].a++;
+                reverse ? stats->acgtno_revcomp[ read_cycle ].t++ : stats->acgtno_revcomp[ read_cycle ].a++;
                 break;
             case 2:
                 acgtno_cycles[ read_cycle ].c++;
+                reverse ? stats->acgtno_revcomp[ read_cycle ].g++ : stats->acgtno_revcomp[ read_cycle ].c++;
                 gc_count++;
                 break;
             case 4:
                 acgtno_cycles[ read_cycle ].g++;
+                reverse ? stats->acgtno_revcomp[ read_cycle ].c++ : stats->acgtno_revcomp[ read_cycle ].g++;
                 gc_count++;
                 break;
             case 8:
+                reverse ? stats->acgtno_revcomp[ read_cycle ].a++ : stats->acgtno_revcomp[ read_cycle ].t++;
                 acgtno_cycles[ read_cycle ].t++;
                 break;
             case 15:
@@ -1129,6 +1138,8 @@ static void remove_overlaps(bam1_t *bam_line, khash_t(qn2pair) *read_pairs, stat
 
 void collect_stats(bam1_t *bam_line, stats_t *stats, khash_t(qn2pair) *read_pairs)
 {
+    if ( !is_in_regions(bam_line,stats) )
+        return;
     if ( stats->rg_hash )
     {
         const uint8_t *rg = bam_aux_get(bam_line, "RG");
@@ -1145,8 +1156,6 @@ void collect_stats(bam1_t *bam_line, stats_t *stats, khash_t(qn2pair) *read_pair
         stats->nreads_filtered++;
         return;
     }
-    if ( !is_in_regions(bam_line,stats) )
-        return;
     if ( stats->info->filter_readlen!=-1 && bam_line->core.l_qseq!=stats->info->filter_readlen )
         return;
 
@@ -1157,6 +1166,11 @@ void collect_stats(bam1_t *bam_line, stats_t *stats, khash_t(qn2pair) *read_pair
     {
         stats->nreads_secondary++;
         return;
+    }
+
+    if ( bam_line->core.flag & BAM_FSUPPLEMENTARY )
+    {
+        stats->nreads_supplementary++;
     }
 
     // If line has no sequence cannot continue
@@ -1187,8 +1201,7 @@ void collect_stats(bam1_t *bam_line, stats_t *stats, khash_t(qn2pair) *read_pair
 
     // These stats should only be calculated for the original reads ignoring supplementary artificial reads
     // otherwise we'll accidentally double count
-    if ( IS_ORIGINAL(bam_line) )
-    {
+    if ( IS_ORIGINAL(bam_line) ) {
         stats->read_lengths[read_len]++;
         if ( order == READ_ORDER_FIRST ) stats->read_lengths_1st[read_len]++;
         if ( order == READ_ORDER_LAST ) stats->read_lengths_2nd[read_len]++;
@@ -1200,7 +1213,7 @@ void collect_stats(bam1_t *bam_line, stats_t *stats, khash_t(qn2pair) *read_pair
 
     count_indels(stats, bam_line);
 
-    if ( IS_PAIRED_AND_MAPPED(bam_line) )
+    if ( IS_PAIRED_AND_MAPPED(bam_line) && IS_ORIGINAL(bam_line) )
     {
         // The insert size is tricky, because for long inserts the libraries are
         // prepared differently and the pairs point in other direction. BWA does
@@ -1495,7 +1508,7 @@ void output_stats(FILE *to, stats_t *stats, int sparse)
     fprintf(to, "# CHK, CRC32 of reads which passed filtering followed by addition (32bit overflow)\n");
     fprintf(to, "CHK\t%08x\t%08x\t%08x\n", stats->checksum.names,stats->checksum.reads,stats->checksum.quals);
     fprintf(to, "# Summary Numbers. Use `grep ^SN | cut -f 2-` to extract this part.\n");
-    fprintf(to, "SN\traw total sequences:\t%ld\n", (long)(stats->nreads_filtered+stats->nreads_1st+stats->nreads_2nd+stats->nreads_other));  // not counting excluded seqs (and none of the below)
+    fprintf(to, "SN\traw total sequences:\t%ld\t# excluding supplementary and secondary reads\n", (long)(stats->nreads_filtered+stats->nreads_1st+stats->nreads_2nd+stats->nreads_other));  // not counting excluded seqs (and none of the below)
     fprintf(to, "SN\tfiltered sequences:\t%ld\n", (long)stats->nreads_filtered);
     fprintf(to, "SN\tsequences:\t%ld\n", (long)(stats->nreads_1st+stats->nreads_2nd+stats->nreads_other));
     fprintf(to, "SN\tis sorted:\t%d\n", stats->is_sorted ? 1 : 0);
@@ -1510,6 +1523,7 @@ void output_stats(FILE *to, stats_t *stats, int sparse)
     fprintf(to, "SN\treads MQ0:\t%ld\t# mapped and MQ=0\n", (long)stats->nreads_mq0);
     fprintf(to, "SN\treads QC failed:\t%ld\n", (long)stats->nreads_QCfailed);
     fprintf(to, "SN\tnon-primary alignments:\t%ld\n", (long)stats->nreads_secondary);
+    fprintf(to, "SN\tsupplementary alignments:\t%ld\n", (long)stats->nreads_supplementary);
     fprintf(to, "SN\ttotal length:\t%ld\t# ignores clipping\n", (long)stats->total_len);
     fprintf(to, "SN\ttotal first fragment length:\t%ld\t# ignores clipping\n", (long)stats->total_len_1st);
     fprintf(to, "SN\ttotal last fragment length:\t%ld\t# ignores clipping\n", (long)stats->total_len_2nd);
@@ -1612,7 +1626,18 @@ void output_stats(FILE *to, stats_t *stats, int sparse)
                 100.*(acgtno_count_1st->t + acgtno_count_2nd->t)/acgt_sum,
                 100.*(acgtno_count_1st->n + acgtno_count_2nd->n)/acgt_sum,
                 100.*(acgtno_count_1st->other + acgtno_count_2nd->other)/acgt_sum);
-
+    }
+    fprintf(to, "# ACGT content per cycle, read oriented. Use `grep ^GCT | cut -f 2-` to extract this part. The columns are: cycle; A,C,G,T base counts as a percentage of all A/C/G/T bases [%%]\n");
+    for (ibase=0; ibase<stats->max_len; ibase++)
+    {
+        acgtno_count_t *acgtno_count = &(stats->acgtno_revcomp[ibase]);
+        uint64_t acgt_sum = acgtno_count->a + acgtno_count->c + acgtno_count->g + acgtno_count->t;
+        if ( ! acgt_sum ) continue;
+        fprintf(to, "GCT\t%d\t%.2f\t%.2f\t%.2f\t%.2f\n", ibase+1,
+                100.*(acgtno_count->a)/acgt_sum,
+                100.*(acgtno_count->c)/acgt_sum,
+                100.*(acgtno_count->g)/acgt_sum,
+                100.*(acgtno_count->t)/acgt_sum);
     }
 
     uint64_t tA=0, tC=0, tG=0, tT=0, tN=0;
@@ -2085,6 +2110,7 @@ void cleanup_stats(stats_t* stats)
     free(stats->mpc_buf);
     free(stats->acgtno_cycles_1st);
     free(stats->acgtno_cycles_2nd);
+    free(stats->acgtno_revcomp);
     free(stats->read_lengths);
     free(stats->read_lengths_1st);
     free(stats->read_lengths_2nd);
@@ -2269,6 +2295,8 @@ static void init_stat_structs(stats_t* stats, stats_info_t* info, const char* gr
     if (!stats->acgtno_cycles_1st) goto nomem;
     stats->acgtno_cycles_2nd  = calloc(stats->nbases,sizeof(acgtno_count_t));
     if (!stats->acgtno_cycles_2nd) goto nomem;
+    stats->acgtno_revcomp  = calloc(stats->nbases,sizeof(acgtno_count_t));
+    if (!stats->acgtno_revcomp) goto nomem;
     stats->read_lengths   = calloc(stats->nbases,sizeof(uint64_t));
     if (!stats->read_lengths)     goto nomem;
     stats->read_lengths_1st   = calloc(stats->nbases,sizeof(uint64_t));

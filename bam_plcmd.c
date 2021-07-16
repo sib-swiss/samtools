@@ -1,6 +1,6 @@
 /*  bam_plcmd.c -- mpileup subcommand.
 
-    Copyright (C) 2008-2015, 2019 Genome Research Ltd.
+    Copyright (C) 2008-2015, 2019-2021 Genome Research Ltd.
     Portions copyright (C) 2009-2012 Broad Institute.
 
     Author: Heng Li <lh3@sanger.ac.uk>
@@ -90,8 +90,10 @@ static inline int pileup_seq(FILE *fp, const bam_pileup1_t *p, hts_pos_t pos,
     int del_len = -p->indel;
     if (p->indel > 0) {
         int len = bam_plp_insertion(p, ks, &del_len);
-        if (len < 0)
+        if (len < 0) {
+            print_error("mpileup", "bam_plp_insertion() failed");
             return -1;
+        }
         putc('+', fp); printw(len, fp);
         if (bam_is_rev(p->b)) {
             char pad = rev_del ? '#' : '*';
@@ -126,10 +128,11 @@ static inline int pileup_seq(FILE *fp, const bam_pileup1_t *p, hts_pos_t pos,
 #define MPLP_REDO_BAQ   (1<<6)
 #define MPLP_ILLUMINA13 (1<<7)
 #define MPLP_IGNORE_RG  (1<<8)
-#define MPLP_PRINT_QPOS (1<<9)
-#define MPLP_PER_SAMPLE (1<<11)
-#define MPLP_SMART_OVERLAPS (1<<12)
+#define MPLP_PER_SAMPLE (1<<9)
+#define MPLP_SMART_OVERLAPS (1<<10)
 
+#define MPLP_PRINT_MAPQ_CHAR (1<<11)
+#define MPLP_PRINT_QPOS  (1<<12)
 #define MPLP_PRINT_QNAME (1<<13)
 #define MPLP_PRINT_FLAG  (1<<14)
 #define MPLP_PRINT_RNAME (1<<15)
@@ -294,9 +297,7 @@ print_empty_pileup(FILE *fp, const mplp_conf_t *conf, const char *tname,
     fprintf(fp, "%s\t%"PRIhts_pos"\t%c", tname, pos+1, (ref && pos < ref_len)? ref[pos] : 'N');
     for (i = 0; i < n; ++i) {
         fputs("\t0\t*\t*", fp);
-        if (conf->flag & MPLP_PRINT_QPOS)
-            fputs("\t*", fp);
-        int flag_value = MPLP_PRINT_QNAME;
+        int flag_value = MPLP_PRINT_MAPQ_CHAR;
         while(flag_value < MPLP_PRINT_QUAL + 1) {
             if (conf->flag & flag_value)
                 fputs("\t*", fp);
@@ -757,9 +758,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn, char **fn_idx)
                 fprintf(pileup_fp, "\t%d\t", cnt);
                 if (n_plp[i] == 0) {
                     fputs("*\t*", pileup_fp);
-                    if (conf->flag & MPLP_PRINT_QPOS)
-                        fputs("\t*", pileup_fp);
-                    int flag_value = MPLP_PRINT_QNAME;
+                    int flag_value = MPLP_PRINT_MAPQ_CHAR;
                     while(flag_value < MPLP_PRINT_QUAL + 1) {
                         if (conf->flag & flag_value)
                             fputs("\t*", pileup_fp);
@@ -805,25 +804,8 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn, char **fn_idx)
                     }
                     if (!n) putc('*', pileup_fp);
 
-                    /* Print mpileup positions */
-                    if (conf->flag & MPLP_PRINT_QPOS) {
-                        n = 0;
-                        putc('\t', pileup_fp);
-                        for (j = 0; j < n_plp[i]; ++j) {
-                            const bam_pileup1_t *p = plp[i] + j;
-                            int c = p->qpos < p->b->core.l_qseq
-                                    ? bam_get_qual(p->b)[p->qpos]
-                                                         : 0;
-                            if ( c < conf->min_baseQ ) continue;
-                            if (n > 0) putc(',', pileup_fp);
-                            n++;
-                            fprintf(pileup_fp, "%d", p->qpos + 1);
-                        }
-                        if (!n) putc('*', pileup_fp);
-                    }
-
                     /* Print selected columns */
-                    int flag_value = MPLP_PRINT_QNAME;
+                    int flag_value = MPLP_PRINT_MAPQ_CHAR;
                     while(flag_value < MPLP_PRINT_QUAL + 1) {
                         if (conf->flag & flag_value) {
                             n = 0;
@@ -834,10 +816,18 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn, char **fn_idx)
                                     ? bam_get_qual(p->b)[p->qpos]
                                     : 0;
                                 if ( c < conf->min_baseQ ) continue;
-                                if (n > 0 && flag_value != MPLP_PRINT_MAPQ) putc(',', pileup_fp);
+                                if (n > 0 && flag_value != MPLP_PRINT_MAPQ_CHAR) putc(',', pileup_fp);
                                 n++;
 
                                 switch (flag_value) {
+                                case MPLP_PRINT_MAPQ_CHAR:
+                                    c = p->b->core.qual + 33;
+                                    if (c > 126) c = 126;
+                                    putc(c, pileup_fp);
+                                    break;
+                                case MPLP_PRINT_QPOS:
+                                    fprintf(pileup_fp, "%d", p->qpos + 1);
+                                    break;
                                 case MPLP_PRINT_QNAME:
                                     fputs(bam_get_qname(p->b), pileup_fp);
                                     break;
@@ -854,9 +844,7 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn, char **fn_idx)
                                     fprintf(pileup_fp, "%"PRId64, (int64_t) p->b->core.pos + 1);
                                     break;
                                 case MPLP_PRINT_MAPQ:
-                                    c = p->b->core.qual + 33;
-                                    if (c > 126) c = 126;
-                                    putc(c, pileup_fp);
+                                    fprintf(pileup_fp, "%d", p->b->core.qual);
                                     break;
                                 case MPLP_PRINT_RNEXT:
                                     if (p->b->core.mtid >= 0)
@@ -928,6 +916,12 @@ static int mpileup(mplp_conf_t *conf, int n, char **fn, char **fn_idx)
             }
             putc('\n', pileup_fp);
         }
+    }
+
+    if (ret < 0) {
+        print_error("mpileup", "error reading from input file");
+        ret = EXIT_FAILURE;
+        goto fail;
     }
 
     if (conf->all && !(conf->flag & MPLP_BCF)) {
@@ -1110,9 +1104,9 @@ static void print_usage(FILE *fp, const mplp_conf_t *mplp)
     fprintf(fp,
 "  -r, --region REG        region in which pileup is generated\n"
 "  -R, --ignore-RG         ignore RG tags (one BAM = one sample)\n"
-"  --rf, --incl-flags STR|INT  required flags: skip reads with mask bits unset [%s]\n", tmp_require);
+"  --rf, --incl-flags STR|INT  required flags: include reads with any of the mask bits set [%s]\n", tmp_require);
     fprintf(fp,
-"  --ff, --excl-flags STR|INT  filter flags: skip reads with mask bits set\n"
+"  --ff, --excl-flags STR|INT  filter flags: skip reads with any of the mask bits set\n"
 "                                            [%s]\n", tmp_filter);
     fprintf(fp,
 "  -x, --ignore-overlaps   disable read-pair overlap detection\n"
@@ -1281,7 +1275,7 @@ int bam_mpileup(int argc, char *argv[])
         case 'E': mplp.flag |= MPLP_REDO_BAQ; break;
         case '6': mplp.flag |= MPLP_ILLUMINA13; break;
         case 'R': mplp.flag |= MPLP_IGNORE_RG; break;
-        case 's': mplp.flag |= MPLP_PRINT_MAPQ; break;
+        case 's': mplp.flag |= MPLP_PRINT_MAPQ_CHAR; break;
         case 'O': mplp.flag |= MPLP_PRINT_QPOS; break;
         case 'C': mplp.capQ_thres = atoi(optarg); break;
         case 'q': mplp.min_mq = atoi(optarg); break;

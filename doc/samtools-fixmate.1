@@ -1,5 +1,5 @@
 '\" t
-.TH samtools-fixmate 1 "6 December 2019" "samtools-1.10" "Bioinformatics tools"
+.TH samtools-fixmate 1 "7 July 2021" "samtools-1.13" "Bioinformatics tools"
 .SH NAME
 samtools fixmate \- fills in mate coordinates and insert size fields.
 .\"
@@ -44,7 +44,7 @@ samtools fixmate \- fills in mate coordinates and insert size fields.
 .SH SYNOPSIS
 .PP
 samtools fixmate
-.RB [ -rpcm ]
+.RB [ -rpcmu ]
 .RB [ -O
 .IR format ]
 .I in.nameSrt.bam out.bam
@@ -69,6 +69,9 @@ Add template cigar ct tag.
 Add ms (mate score) tags.  These are used by
 .B markdup
 to select the best reads to keep.
+.TP
+.B -u
+Output uncompressed BAM or CRAM.
 .TP
 .BI "-O " FORMAT
 Write the final output as

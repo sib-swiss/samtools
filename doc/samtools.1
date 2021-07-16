@@ -1,9 +1,9 @@
 '\" t
-.TH samtools 1 "6 December 2019" "samtools-1.10" "Bioinformatics tools"
+.TH samtools 1 "7 July 2021" "samtools-1.13" "Bioinformatics tools"
 .SH NAME
 samtools \- Utilities for the Sequence Alignment/Map (SAM) format
 .\"
-.\" Copyright (C) 2008-2011, 2013-2019 Genome Research Ltd.
+.\" Copyright (C) 2008-2011, 2013-2020 Genome Research Ltd.
 .\" Portions copyright (C) 2010, 2011 Broad Institute.
 .\"
 .\" Author: Heng Li <lh3@sanger.ac.uk>
@@ -67,6 +67,8 @@ samtools bedcov aln.sorted.bam
 .PP
 samtools depth aln.sorted.bam
 .PP
+samtools ampliconstats primers.bed in.bam
+.PP
 samtools mpileup -C50 -f ref.fasta -r chr3:1,000-2,000 in1.bam in2.bam
 .PP
 samtools coverage aln.sorted.bam
@@ -76,6 +78,8 @@ samtools merge out.bam in1.bam in2.bam in3.bam
 samtools split merged.bam
 .PP
 samtools cat out.bam in1.bam in2.bam in3.bam
+.PP
+samtools import input.fastq > output.bam
 .PP
 samtools fastq input.bam > output.fastq
 .PP
@@ -102,6 +106,8 @@ samtools targetcut input.bam
 samtools phase input.bam
 .PP
 samtools depad input.bam
+.PP
+samtools ampliconclip -b bed.file input.bam
 
 .SH DESCRIPTION
 .PP
@@ -374,6 +380,21 @@ samtools depth
 
 Computes the read depth at each position or region.
 
+.TP \"-------- ampliconstats
+.B ampliconstats
+samtools ampliconstats
+.RI [ options ]
+.IR primers.bed
+.IR in.sam | in.bam | in.cram [...]
+
+samtools ampliconstats collects statistics from one or more input
+alignment files and produces tables in text format.  The output can be
+visualized graphically using plot-ampliconstats.
+
+The alignment files should have previously been clipped of primer
+sequence, for example by \fBsamtools ampliconclip\fR and the sites of
+these primers should be specified as a bed file in the arguments.
+
 .TP \"-------- mpileup
 .B mpileup
 samtools mpileup
@@ -465,6 +486,18 @@ dictionary of each input file must be identical, although this command
 does not check this. This command uses a similar trick to
 .B reheader
 which enables fast BAM concatenation.
+
+.TP \"-------- import
+.B import
+samtools import
+.RI [ options ]
+.IR in.fastq " [ ... ]"
+
+Converts one or more FASTQ files to unaligned SAM, BAM or CRAM.  These
+formats offer a richer capability of tracking sample meta-data via the
+SAM header and per-read meta-data via the auxiliary tags.  The
+.B fastq
+command may be used to reverse this conversion.
 
 .TP \"-------- fastq fasta
 .B fastq/a
@@ -683,6 +716,25 @@ the reference "*" bases are deleted and such aligned sequence
 base-calls become insertions.  Similarly transformations apply for
 deletions and padding cigar operations.
 
+.TP \"-------- ampliconclip
+.B ampliconclip
+samtools ampliconclip
+.RB [ -o
+.IR out.file ]
+.RB [ -f
+.IR stat.file ]
+.RB [ --soft-clip ]
+.RB [ --hard-clip ]
+.RB [ --both-ends ]
+.RB [ --strand ]
+.RB [ --clipped ]
+.RB [ --fail ]
+.RB [ --no-PG ]
+.B -b
+.I bed.file in.file
+
+Clip reads in a SAM compatible file based on data from a BED file.
+
 .SH SAMTOOLS OPTIONS
 These are options that are passed after the \fBsamtools\fR command,
 before any sub-command is specified.
@@ -735,6 +787,11 @@ compression, otherwise SAM defaults to uncompressed.
 Specifies the number of threads to use during encoding and/or
 decoding.  For BAM this will be encoding only.  In CRAM the threads
 are dynamically shared between encoder and decoder.
+.TP
+.BI filter= STRING
+Apply filter STRING to all incoming records, rejecting any that do not
+satisfy the expression.  See the FILTER EXPRESSIONS section below for
+specifics.
 .\" CRAM specific
 .TP
 .BI reference= fasta_file
@@ -855,7 +912,7 @@ For example: to convert a BAM to a compressed SAM with CSI indexing:
 samtools view -h -O sam,level=6 --write-index in.bam -o out.sam.gz
 .EE
 .PP
-To convert a SAM to a compresed BAM using BAI indexing:
+To convert a SAM to a compressed BAM using BAI indexing:
 .EX 4
 samtools view --write-index in.sam -o out.bam##idx##out.bam.bai
 .EE
@@ -892,6 +949,139 @@ Look for MD5 via REF_CACHE environment variable.
 Look for MD5 in each element of the REF_PATH environment variable.
 .IP 4. 3
 Look for a local file listed in the UR: header tag.
+
+.PP
+.SH FILTER EXPRESSIONS
+.PP
+Filter expressions are used as an on-the-fly checking of incoming SAM,
+BAM or CRAM records, discarding records that do not match the
+specified expression.
+
+The language used is primarily C style, but with a few differences in
+the precedence rules for bit operators and the inclusion of regular
+expression matching.
+
+The operator precedence, from strongest binding to weakest, is:
+
+.TS
+l lb l .
+Grouping	(, )	E.g. "(1+2)*3"
+Values:	literals, vars	Numbers, strings and variables
+Unary ops:	+, -, !, ~ 	E.g. -10 +10, !10 (not), ~5 (bit not)
+Math ops:	*, /, %	Multiply, division and (integer) modulo
+Math ops:	+, -	Addition / subtraction
+Bit-wise:	&	Integer AND
+Bit-wise	^	Integer XOR
+Bit-wise	|	Integer OR
+Conditionals:	>, >=, <, <=
+Equality:	==, !=, =~, !~	=~ and !~ match regular expressions
+Boolean:	&&, ||	Logical AND / OR
+.TE
+
+Expressions are computed using floating point mathematics, so "10 / 4"
+evaluates to 2.5 rather than 2.  They may be written as integers in
+decimal or "0x" plus hexadecimal, and floating point with or without
+exponents.However operations that require integers first do an
+implicit type conversion, so "7.9 % 5" is 2 and "7.9 & 4.1" is
+equivalent to "7 & 4", which is 4.  Strings are always specified using
+double quotes.  To get a double quote in a string, use backslash.
+Similarly a double backslash is used to get a literal backslash.  For
+example \fBab\\"c\\\\d\fR is the string \fBab"c\\d\fR.
+
+Comparison operators are evaluated as a match being 1 and a mismatch
+being 0, thus "(2 > 1) + (3 < 5)" evaluates as 2.
+
+The variables are where the file format specifics are accessed from
+the expression.  The variables correspond to SAM fields, for example
+to find paired alignments with high mapping quality and a very large
+insert size, we may use the expression "\fBmapq >= 30 && (tlen >= 100000 || tlen <= -100000)\fR".
+Valid variable names and their data types are:
+
+.TS
+lb l l .
+endpos	int	Alignment end position (1-based)
+flag	int	Combined FLAG field
+flag.paired	int	Single bit, 0 or 1
+flag.proper_pair	int	Single bit, 0 or 2
+flag.unmap	int	Single bit, 0 or 4
+flag.munmap	int	Single bit, 0 or 8
+flag.reverse	int	Single bit, 0 or 16
+flag.mreverse	int	Single bit, 0 or 32
+flag.read1	int	Single bit, 0 or 64
+flag.read2	int	Single bit, 0 or 128
+flag.secondary	int	Single bit, 0 or 256
+flag.qcfail	int	Single bit, 0 or 512
+flag.dup	int	Single bit, 0 or 1024
+flag.supplementary	int	Single bit, 0 or 2048
+library	string	Library (LB header via RG)
+mapq	int	Mapping quality
+mpos	int	Synonym for pnext
+mrefid	int	Mate reference number (0 based)
+mrname	string	Synonym for rnext
+ncigar	int	Number of cigar operations
+pnext	int	Mate's alignment position (1-based)
+pos	int	Alignment position (1-based)
+qlen	int	Alignment length: no. query bases
+qname	string	Query name
+qual	string	Quality values (raw, 0 based)
+refid	int	Integer reference number (0 based)
+rlen	int	Alignment length: no. reference bases
+rname	string	Reference name
+rnext	string	Mate's reference name
+seq	string	Sequence
+tlen	int	Template length (insert size)
+[XX]	int / string	XX tag value
+.TE
+
+Flags are returned either as the whole flag value or by checking for a
+single bit.  Hence the filter expression \fBflag.dup\fR is
+equivalent to \fBflag & 1024\fR.
+
+"qlen" and "rlen" are measured using the CIGAR string to count the
+number of query (sequence) and reference bases consumed.  Note "qlen"
+may not exactly match the length of the "seq" field if the sequence is
+"*".
+
+"endpos" is the (1-based inclusive) position of the rightmost mapped base
+of the read, as measured using the CIGAR string, and for mapped reads
+is equivalent to "pos+rlen-1". For unmapped reads, it is the same as
+"pos".
+
+Reference names may be matched either by their string forms ("rname"
+and "mrname") or as the Nth \fB@SQ\fR line (counting from zero) as
+stored in BAM using "tid" and "mtid" respectively.
+
+Auxiliary tags are described in square brackets and these expand to
+either integer or string as defined by the tag itself (\fBXX:Z:\fIstring\fR or
+\fBXX:i:\fIint\fR).  For example \fB[NM]>=10\fR can be used to look
+for alignments with many mismatches and \fB[RG]=~"grp[ABC]-"\fR will
+match the read-group string.
+
+If no comparison is used with an auxiliary tag it is taken simply to
+be a test for the existence of that tag.  So "[NM]" will return any
+record containing an NM tag, even if that tag is zero (\fBNM:i:0\fR).
+
+If you need to check specifically for a non-zero value then use \fB[NM]
+&& [NM]!=0\fR.
+
+Some simple functions are available to operate on strings.  These
+treat the strings as arrays of bytes, permitting their length,
+minimum, maximum and average values to be computed.
+
+.TS
+lb l .
+length	Length of the string (excluding nul char)
+min	Minimum byte value in the string
+max	Maximum byte value in the string
+avg	Average byte value in the string
+.TE
+
+Note that "avg" is a floating point value and it may be NAN for empty
+strings.  This means that "avg(qual)" does not produce an error for
+records that have both seq and qual of "*".  This value will fail any
+conditional checks, so e.g. "avg(qual) > 20" works and will not report
+these records.
+
 .PP
 .SH ENVIRONMENT VARIABLES
 .PP
@@ -923,26 +1113,28 @@ temporary directory if no home directory is found) will be used similarly.
 
 .TP
 .B REF_CACHE
-This can be defined to a single directory housing a local cache of
+This can be defined to a single location housing a local cache of
 references.  Upon downloading a reference it will be stored in the
-location pointed to by REF_CACHE.  When reading a reference it will be
-looked for in this directory before searching REF_PATH.  To avoid many
-files being stored in the same directory, a pathname may be
-constructed using %\fInum\fRs and %s notation, consuming \fInum\fR
-characters of the MD5sum.  For example
-\fB/local/ref_cache/%2s/%2s/%s\fR will create 2 nested subdirectories
-with the filenames in the deepest directory being the last 28
-characters of the md5sum.
+location pointed to by REF_CACHE.  REF_CACHE will be searched
+before attempting to load via the REF_PATH search list.  If no
+REF_PATH is defined, both REF_PATH and REF_CACHE will be automatically
+set (see above), but if REF_PATH is defined and REF_CACHE not then no
+local cache is used.
 
-The REF_CACHE directory will be searched for before attempting to load
-via the REF_PATH search list.  If no REF_PATH is defined, both
-REF_PATH and REF_CACHE will be automatically set (see above), but if
-REF_PATH is defined and REF_CACHE not then no local cache is used.
+To avoid many files being stored in the same directory, REF_CACHE may
+be defined as a pattern using \fB%\fR\fInum\fR\fBs\fR to consume \fInum\fR
+characters of the MD5sum and \fB%s\fR to consume all remaining characters.
+If REF_CACHE lacks \fB%s\fR then it will get an implicit \fB/%s\fR appended.
 
 To aid population of the REF_CACHE directory a script
 \fBmisc/seq_cache_populate.pl\fR is provided in the Samtools
 distribution. This takes a fasta file or a directory of fasta files
 and generates the MD5sum named files.
+
+For example if you use \fBseq_cache_populate -subdirs 2 -root
+/local/ref_cache\fR to create 2 nested subdirectories (the default),
+each consuming 2 characters of the MD5sum, then REF_CACHE must be set
+to \fB/local/ref_cache/%2s/%2s/%s\fR.
 .PP
 .SH EXAMPLES
 .IP o 2
@@ -990,6 +1182,8 @@ for further authorship.
 
 .SH SEE ALSO
 .IR samtools-addreplacerg (1),
+.IR samtools-ampliconclip (1),
+.IR samtools-ampliconstats (1),
 .IR samtools-bedcov (1),
 .IR samtools-calmd (1),
 .IR samtools-cat (1),
@@ -1006,6 +1200,7 @@ for further authorship.
 .IR samtools-flagstat (1),
 .IR samtools-fqidx (1),
 .IR samtools-idxstats (1),
+.IR samtools-import (1),
 .IR samtools-index (1),
 .IR samtools-markdup (1),
 .IR samtools-merge (1),

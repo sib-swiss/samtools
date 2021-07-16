@@ -1,7 +1,7 @@
 /*  bedcov.c -- bedcov subcommand.
 
     Copyright (C) 2012 Broad Institute.
-    Copyright (C) 2013-2014, 2018-2020 Genome Research Ltd.
+    Copyright (C) 2013-2014, 2018-2021 Genome Research Ltd.
 
     Author: Heng Li <lh3@sanger.ac.uk>
 
@@ -72,7 +72,7 @@ int main_bedcov(int argc, char *argv[])
     kstream_t *ks;
     hts_idx_t **idx;
     aux_t **aux;
-    int *n_plp, dret, i, j, m, n, c, min_mapQ = 0, skip_DN = 0;
+    int *n_plp, dret, i, j, m, n, c, ret, status = 0, min_mapQ = 0, skip_DN = 0;
     int64_t *cnt, *pcov = NULL;;
     const bam_pileup1_t **plp;
     int usage = 0, has_index_file = 0;
@@ -92,7 +92,7 @@ int main_bedcov(int argc, char *argv[])
         case 'g':
             tflags = bam_str2flag(optarg);
             if (tflags < 0 || tflags > ((BAM_FSUPPLEMENTARY << 1) - 1)) {
-                print_error_errno("depth", "Flag value \"%s\" is not supported", optarg);
+                print_error("bedcov", "Flag value \"%s\" is not supported", optarg);
                 return 1;
             }
             flags &= ~tflags;
@@ -100,7 +100,7 @@ int main_bedcov(int argc, char *argv[])
         case 'G':
             tflags = bam_str2flag(optarg);
             if (tflags < 0 || tflags > ((BAM_FSUPPLEMENTARY << 1) - 1)) {
-                print_error_errno("depth", "Flag value \"%s\" is not supported", optarg);
+                print_error("bedcov", "Flag value \"%s\" is not supported", optarg);
                 return 1;
             }
             flags |= tflags;
@@ -179,7 +179,8 @@ int main_bedcov(int argc, char *argv[])
     plp = calloc(n, sizeof(bam_pileup1_t*));
     while (ks_getuntil(ks, KS_SEP_LINE, &str, &dret) >= 0) {
         char *p, *q;
-        int tid, beg, end, pos;
+        int tid, pos, num = 0;
+        int64_t beg = 0, end = 0;
         bam_mplp_t mplp;
 
         if (str.l == 0 || *str.s == '#') continue; /* empty or comment line */
@@ -188,18 +189,13 @@ int main_bedcov(int argc, char *argv[])
            be followed by a tab in that case). */
         if (strncmp(str.s, "track ", 6) == 0) continue;
         if (strncmp(str.s, "browser ", 8) == 0) continue;
-        for (p = q = str.s; *p && *p != '\t'; ++p);
-        if (*p != '\t') goto bed_error;
-        *p = 0; tid = bam_name2id(aux[0]->header, q); *p = '\t';
+        for (p = q = str.s; *p && !isspace(*p); ++p);
+        if (*p == 0) goto bed_error;
+        char c = *p;
+        *p = 0; tid = bam_name2id(aux[0]->header, q); *p = c;
         if (tid < 0) goto bed_error;
-        for (q = p = p + 1; isdigit(*p); ++p);
-        if (*p != '\t') goto bed_error;
-        *p = 0; beg = atoi(q); *p = '\t';
-        for (q = p = p + 1; isdigit(*p); ++p);
-        if (*p == '\t' || *p == 0) {
-            int c = *p;
-            *p = 0; end = atoi(q); *p = c;
-        } else goto bed_error;
+        num = sscanf(p + 1, "%"SCNd64" %"SCNd64, &beg, &end);
+        if (num < 2 || end < beg) goto bed_error;
 
         for (i = 0; i < n; ++i) {
             if (aux[i]->iter) hts_itr_destroy(aux[i]->iter);
@@ -215,7 +211,7 @@ int main_bedcov(int argc, char *argv[])
         memset(cnt, 0, sizeof(*cnt) * n);
         if (min_depth >= 0) memset(pcov, 0, sizeof(*pcov) * n);
 
-        while (bam_mplp_auto(mplp, &tid, &pos, n_plp, plp) > 0)
+        while ((ret = bam_mplp_auto(mplp, &tid, &pos, n_plp, plp)) > 0)
             if (pos >= beg && pos < end) {
                 for (i = 0; i < n; ++i) {
                     m = 0;
@@ -230,6 +226,14 @@ int main_bedcov(int argc, char *argv[])
                     if (min_depth >= 0 && pd >= min_depth) pcov[i]++;
                 }
             }
+
+        if (ret < 0) {
+            print_error("bedcov", "error reading from input file");
+            status = 2;
+            bam_mplp_destroy(mplp);
+            break;
+        }
+
         for (i = 0; i < n; ++i) {
             kputc('\t', &str);
             kputl(cnt[i], &str);
@@ -246,6 +250,7 @@ int main_bedcov(int argc, char *argv[])
 
 bed_error:
         fprintf(stderr, "Errors in BED line '%s'\n", str.s);
+        status = 2;
     }
     free(n_plp); free(plp);
     ks_destroy(ks);
@@ -263,5 +268,5 @@ bed_error:
     free(aux); free(idx);
     free(str.s);
     sam_global_args_free(&ga);
-    return 0;
+    return status;
 }

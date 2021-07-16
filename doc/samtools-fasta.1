@@ -1,9 +1,9 @@
 '\" t
-.TH samtools-fasta 1 "6 December 2019" "samtools-1.10" "Bioinformatics tools"
+.TH samtools-fasta 1 "7 July 2021" "samtools-1.13" "Bioinformatics tools"
 .SH NAME
 samtools fasta / fastq \- converts a SAM/BAM/CRAM file to FASTA or FASTQ
 .\"
-.\" Copyright (C) 2008-2011, 2013-2019 Genome Research Ltd.
+.\" Copyright (C) 2008-2011, 2013-2020 Genome Research Ltd.
 .\" Portions copyright (C) 2010, 2011 Broad Institute.
 .\"
 .\" Author: Heng Li <lh3@sanger.ac.uk>
@@ -94,7 +94,7 @@ Sequences will be written to standard output unless one of the
 .BR -1 ", " -2 ", " -o ", or " -0
 options is used, in which case sequences for that category will be written to
 the specified file.
-The same filename may be specified with multiple options, in which ase the
+The same filename may be specified with multiple options, in which case the
 sequences will be multiplexed in order of occurrence.
 
 If a singleton file is specified using the
@@ -267,7 +267,7 @@ samtools fastq -0 /dev/null -s single.fq -N in_name.bam > paired.fq
 
 .SH BUGS
 .IP o 2
-The way of specifying output files is far to complicated and easy to get wrong.
+The way of specifying output files is far too complicated and easy to get wrong.
 
 .SH AUTHOR
 .PP
@@ -278,5 +278,6 @@ all from the Sanger Institute.
 .IR samtools (1),
 .IR samtools-faidx (1),
 .IR samtools-fqidx (1)
+.IR samtools-import (1)
 .PP
 Samtools website: <http://www.htslib.org/>

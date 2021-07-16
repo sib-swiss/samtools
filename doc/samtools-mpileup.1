@@ -1,9 +1,9 @@
 '\" t
-.TH samtools-mpileup 1 "6 December 2019" "samtools-1.10" "Bioinformatics tools"
+.TH samtools-mpileup 1 "7 July 2021" "samtools-1.13" "Bioinformatics tools"
 .SH NAME
 samtools mpileup \- produces "pileup" textual format from an alignment
 .\"
-.\" Copyright (C) 2008-2011, 2013-2019 Genome Research Ltd.
+.\" Copyright (C) 2008-2011, 2013-2020 Genome Research Ltd.
 .\" Portions copyright (C) 2010, 2011 Broad Institute.
 .\"
 .\" Author: Heng Li <lh3@sanger.ac.uk>
@@ -160,12 +160,22 @@ that it is the fifth base of the corresponding read that is mapped to this
 genomic position.
 (Column only present when \fB-O\fR/\fB--output-BP\fR is used.)
 .IP \(ci 2
-Comma-separated read names.
-(Column only present when \fB--output-QNAME\fR is used.)
+Additional comma-separated read field columns,
+as selected via \fB--output-extra\fR.
+The fields selected appear in the same order as in SAM:
+.BR QNAME ,
+.BR FLAG ,
+.BR RNAME ,
+.BR POS ,
+.B MAPQ
+(displayed numerically),
+.BR RNEXT ,
+.BR PNEXT .
 .IP \(ci 2
-Additional columns containing other specified read fields or tags,
-as selected via the \fB--output-extra\fR, \fB--output-sep\fR,
-and \fB--output-empty\fR options.
+Additional read tag field columns, as selected via \fB--output-extra\fR.
+These columns are formatted as determined by \fB--output-sep\fR and
+\fB--output-empty\fR (comma-separated by default), and appear in the
+same order as the tags are given in \fB--output-extra\fR.
 
 .SH OPTIONS
 .TP 10
@@ -224,7 +234,7 @@ for all reads aligned to a reference in the file.  See
 below.
 .TP
 .BI -G,\ --exclude-RG \ FILE
-Exclude reads from readgroups listed in FILE (one @RG-ID per line)
+Exclude reads from read groups listed in FILE (one @RG-ID per line)
 .TP
 .BI -l,\ --positions \ FILE
 BED or position list file containing a list of regions or sites where
@@ -254,10 +264,10 @@ two requests.
 Ignore RG tags. Treat all reads in one BAM as one sample.
 .TP
 .BI --rf,\ --incl-flags \ STR|INT
-Required flags: skip reads with mask bits unset [null]
+Required flags: include reads with any of the mask bits set [null]
 .TP
 .BI --ff,\ --excl-flags \ STR|INT
-Filter flags: skip reads with mask bits set
+Filter flags: skip reads with any of the mask bits set
 [UNMAP,SECONDARY,QCFAIL,DUP]
 .TP
 .B -x,\ --ignore-overlaps
@@ -295,8 +305,7 @@ or
 Output base positions on reads.
 .TP
 .B -s, --output-MQ
-Output mapping quality.
-Equivalent to \fB--output-extra MAPQ\fR.
+Output mapping qualities encoded as ASCII characters.
 .TP
 .B --output-QNAME
 Output an extra column containing comma-separated read names.
@@ -328,7 +337,7 @@ values and a list of NM tag values. Field values are always displayed before
 tag values.
 .TP
 .BI "--output-sep" \ CHAR
-Specify a different separtor character for tag value lists, when those values
+Specify a different separator character for tag value lists, when those values
 might contain one or more commas (\fB,\fR), which is the default list separator.
 This option only affects columns for two-letter tags like NM; standard
 fields like FLAG or QNAME will always be separated by commas.
@@ -372,7 +381,7 @@ option.  To disable it, use the
 .B -B
 option.
 
-It is possible to store pre-calculated BAQ values in a SAM BQ:Z tag.
+It is possible to store precalculated BAQ values in a SAM BQ:Z tag.
 Samtools mpileup will use the precalculated values if it finds them.
 The
 .B -E

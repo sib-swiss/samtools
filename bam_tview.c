@@ -1,6 +1,6 @@
 /*  bam_tview.c -- tview subcommand.
 
-    Copyright (C) 2008-2016, 2019 Genome Research Ltd.
+    Copyright (C) 2008-2016, 2019-2020 Genome Research Ltd.
     Portions copyright (C) 2013 Pierre Lindenbaum, Institut du Thorax, INSERM U1087, Université de Nantes.
 
     Author: Heng Li <lh3@sanger.ac.uk>
@@ -351,6 +351,7 @@ static int tv_push_aln(const bam1_t *b, tview_t *tv)
 
 int base_draw_aln(tview_t *tv, int tid, hts_pos_t pos)
 {
+    int ret;
     assert(tv!=NULL);
     // reset
     tv->my_clear(tv);
@@ -379,9 +380,14 @@ int base_draw_aln(tview_t *tv, int tid, hts_pos_t pos)
     bam_lplbuf_reset(tv->lplbuf);
     hts_itr_t *iter = sam_itr_queryi(tv->idx, tv->curr_tid, tv->left_pos, tv->left_pos + tv->mcol);
     bam1_t *b = bam_init1();
-    while (sam_itr_next(tv->fp, iter, b) >= 0) tv_push_aln(b, tv);
+    while ((ret = sam_itr_next(tv->fp, iter, b)) >= 0) tv_push_aln(b, tv);
     bam_destroy1(b);
     hts_itr_destroy(iter);
+    if (ret < -1) {
+        print_error("tview", "could not read from input file");
+        exit(1);
+    }
+
     bam_lplbuf_push(0, tv->lplbuf);
 
     while (tv->ccol < tv->mcol) {
@@ -407,7 +413,8 @@ static void error(const char *format, ...)
 "   -d display      output as (H)tml or (C)urses or (T)ext \n"
 "   -X              include customized index file\n"
 "   -p chr:pos      go directly to this position\n"
-"   -s STR          display only reads from this sample or group\n");
+"   -s STR          display only reads from this sample or group\n"
+"   -w INT          display width (with -d T only)\n");
         sam_global_opt_help(stderr, "-.--.--.");
     }
     else
@@ -430,7 +437,7 @@ extern tview_t* text_tv_init(const char *fn, const char *fn_fa, const char *fn_i
 
 int bam_tview_main(int argc, char *argv[])
 {
-    int view_mode=display_ncurses;
+    int view_mode=display_ncurses, display_width = 0;
     tview_t* tv=NULL;
     char *samples=NULL, *position=NULL, *ref, *fn_idx=NULL;
     int c, has_index_file = 0, ref_index = 0;
@@ -441,8 +448,13 @@ int bam_tview_main(int argc, char *argv[])
         { NULL, 0, NULL, 0 }
     };
 
-    while ((c = getopt_long(argc, argv, "s:p:d:X", lopts, NULL)) >= 0) {
+    char *tmp;
+    while ((c = getopt_long(argc, argv, "s:p:d:Xw:", lopts, NULL)) >= 0) {
         switch (c) {
+            case 'w':
+                display_width = strtol(optarg,&tmp,10);
+                if ( tmp==optarg || *tmp || display_width<1 ) error("Could not parse: -w %s\n",optarg);
+                break;
             case 's': samples=optarg; break;
             case 'p': position=optarg; break;
             case 'X': has_index_file=1; break; // -X flag for index filename
@@ -463,6 +475,8 @@ int bam_tview_main(int argc, char *argv[])
         }
     }
     if (argc==optind) error(NULL);
+    if (display_width && view_mode == display_ncurses)
+        error("The -w option is currently supported only with -d T and -d H\n");
 
     ref = NULL;
     ref_index = optind;
@@ -487,10 +501,12 @@ int bam_tview_main(int argc, char *argv[])
 
         case display_text:
             tv = text_tv_init(argv[ref_index], ref, fn_idx, samples, &ga.in);
+            if ( display_width ) tv->mcol = display_width;
             break;
 
         case display_html:
             tv = html_tv_init(argv[ref_index], ref, fn_idx, samples, &ga.in);
+            if ( display_width ) tv->mcol = display_width;
             break;
     }
     if (tv==NULL)
